@@ -3,6 +3,7 @@ const bodyParser = require("body-parser");
 const cors = require("cors");
 const https = require("https");
 const v4 = require("uuid").v4;
+require("dotenv").config();
 
 const app = express();
 
@@ -31,7 +32,7 @@ function eventsHandler(request, response, next) {
   );
   if (otherClients.length === 0) {
     const req = https.get(
-      `https://live.wh.geniussports.com/v2/basketball/read/${matchId}?ak=5c1f6cae123427ca457f62f88e7b26ab`,
+      `https://live.wh.geniussports.com/v2/basketball/read/${matchId}?ak=${process.env.API_KEY}`,
       (res) => {
         res.on("data", (chunk) => {
           messageBuffer = messageBuffer + Buffer.from(chunk).toString("utf-8");
