@@ -26,20 +26,13 @@ function eventsHandler(request, response, next) {
   const clientId = Date.now();
 
   //find if any other clients are connected to the same match
-  const otherClients = clients.filter((client) => client.matchId === matchId);
+  const otherClients = clients.filter(
+    (client) => client.matchId === matchId && client.id !== clientId
+  );
   if (otherClients.length === 0) {
-    https.get(
+    const req = https.get(
       `https://live.wh.geniussports.com/v2/basketball/read/${matchId}?ak=5c1f6cae123427ca457f62f88e7b26ab`,
       (res) => {
-        const newClient = {
-          id: clientId,
-          matchId,
-          response,
-          streamingResponse: res,
-        };
-
-        clients.push(newClient);
-
         res.on("data", (chunk) => {
           messageBuffer = messageBuffer + Buffer.from(chunk).toString("utf-8");
           while (messageBuffer.includes("\r\n")) {
@@ -57,11 +50,19 @@ function eventsHandler(request, response, next) {
           // );
         });
 
-        res.on("end", () => {
+        res.on("close", () => {
           console.log("Ending stream with matchId: ", matchId);
         });
       }
     );
+    const newClient = {
+      id: clientId,
+      matchId,
+      response,
+      streamingRequest: req,
+    };
+
+    clients.push(newClient);
   }
 
   //   const data = `data: ${JSON.stringify(facts)}\n\n`;
@@ -75,7 +76,7 @@ function eventsHandler(request, response, next) {
       id: clientId,
       matchId,
       response,
-      streamingResponse: otherClients[0].streamingResponse,
+      streamingRequest: otherClients[0].streamingRequest,
     };
 
     clients.push(newClient);
@@ -85,12 +86,9 @@ function eventsHandler(request, response, next) {
     console.log(`${clientId} Connection closed`);
     const disconnectedClient = clients.find((client) => client.id === clientId);
     //find if any other clients are connected to the same match
-    const otherClients = clients.filter(
-      (client) => client.matchId === disconnectedClient.matchId
-    );
+
     if (otherClients.length === 0) {
-      disconnectedClient.streamingResponse.end();
-      disconnectedClient.streamingResponse.connection.end();
+      disconnectedClient.streamingRequest.destroy();
     }
     clients = clients.filter((client) => client.id !== clientId);
   });
