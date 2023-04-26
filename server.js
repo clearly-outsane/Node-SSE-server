@@ -15,6 +15,7 @@ app.get("/status", (request, response) =>
 );
 
 function eventsHandler(request, response, next) {
+  const matchId = request.query.matchId ?? "2261294";
   const headers = {
     "Content-Type": "text/event-stream",
     Connection: "keep-alive",
@@ -22,58 +23,84 @@ function eventsHandler(request, response, next) {
     // "Access-Control-Allow-Origin": "*",
   };
   response.writeHead(200, headers);
+  const clientId = Date.now();
 
-  https.get(
-    `https://live.wh.geniussports.com/v2/basketball/read/${
-      request.query.matchId ?? "2261294"
-    }?ak=5c1f6cae123427ca457f62f88e7b26ab`,
-    (res) => {
-      res.on("data", (chunk) => {
-        messageBuffer = messageBuffer + Buffer.from(chunk).toString("utf-8");
-        while (messageBuffer.includes("\r\n")) {
-          const message = messageBuffer.split("\r\n", 1)[0];
-          messageBuffer = messageBuffer.slice(message.length + 2);
-          //   let parsedChunk = JSON.parse(messageBuffer.replace(/\r\n$/, ""));
-          sendEventsToAll(message);
-        }
-        // let parsedChunk = JSON.parse(
-        //   Buffer.from(chunk).toString("utf-8").replace(/\r\n$/, "")
-        // );
+  //find if any other clients are connected to the same match
+  const otherClients = clients.filter((client) => client.matchId === matchId);
+  if (otherClients.length === 0) {
+    https.get(
+      `https://live.wh.geniussports.com/v2/basketball/read/${matchId}?ak=5c1f6cae123427ca457f62f88e7b26ab`,
+      (res) => {
+        const newClient = {
+          id: clientId,
+          matchId,
+          response,
+          streamingResponse: res,
+        };
 
-        // clients.forEach((client) =>
-        //   client.response.write(`${JSON.stringify(parsedChunk)}\n`)
-        // );
-      });
+        clients.push(newClient);
 
-      res.on("end", () => {
-        console.log("ENDING");
-      });
-    }
-  );
+        res.on("data", (chunk) => {
+          messageBuffer = messageBuffer + Buffer.from(chunk).toString("utf-8");
+          while (messageBuffer.includes("\r\n")) {
+            const message = messageBuffer.split("\r\n", 1)[0];
+            messageBuffer = messageBuffer.slice(message.length + 2);
+            //   let parsedChunk = JSON.parse(messageBuffer.replace(/\r\n$/, ""));
+            sendEventsToAll(message, matchId);
+          }
+          // let parsedChunk = JSON.parse(
+          //   Buffer.from(chunk).toString("utf-8").replace(/\r\n$/, "")
+          // );
+
+          // clients.forEach((client) =>
+          //   client.response.write(`${JSON.stringify(parsedChunk)}\n`)
+          // );
+        });
+
+        res.on("end", () => {
+          console.log("Ending stream with matchId: ", matchId);
+        });
+      }
+    );
+  }
 
   //   const data = `data: ${JSON.stringify(facts)}\n\n`;
 
   //   response.write(data);
 
-  const clientId = Date.now();
+  if (otherClients.length > 0) {
+    //add new client here only if there is already a client connected to the same match; since we are doing the same thing when a new matchId comes in up top ^^^
 
-  const newClient = {
-    id: clientId,
-    response,
-  };
+    const newClient = {
+      id: clientId,
+      matchId,
+      response,
+      streamingResponse: otherClients[0].streamingResponse,
+    };
 
-  clients.push(newClient);
+    clients.push(newClient);
+  }
 
   request.on("close", () => {
     console.log(`${clientId} Connection closed`);
+    const disconnectedClient = clients.find((client) => client.id === clientId);
+    //find if any other clients are connected to the same match
+    const otherClients = clients.filter(
+      (client) => client.matchId === disconnectedClient.matchId
+    );
+    if (otherClients.length === 0) {
+      disconnectedClient.streamingResponse.end();
+      disconnectedClient.streamingResponse.connection.end();
+    }
     clients = clients.filter((client) => client.id !== clientId);
   });
 }
 
 app.get("/events", eventsHandler);
 
-function sendEventsToAll(data) {
+function sendEventsToAll(data, matchId) {
   clients.forEach((client) => {
+    if (client.matchId !== matchId) return;
     console.log("clients--", clients.length);
     client.response.write(`id: ${v4()}\n`);
     client.response.write(`event: message\n`);
