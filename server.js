@@ -30,7 +30,7 @@ function eventsHandler(request, response, next) {
         messageBuffer = messageBuffer + Buffer.from(chunk).toString("utf-8");
         while (messageBuffer.includes("\r\n")) {
           const message = messageBuffer.split("\r\n", 1)[0];
-          messageBuffer = messageBuffer.slice(message.length);
+          messageBuffer = messageBuffer.slice(message.length + 2);
           //   let parsedChunk = JSON.parse(messageBuffer.replace(/\r\n$/, ""));
           sendEventsToAll(message);
         }
@@ -76,7 +76,6 @@ function sendEventsToAll(data) {
     client.response.write(`id: ${v4()}\n`);
     client.response.write(`event: message\n`);
     client.response.write(`data: ${JSON.stringify(data)}\n\n`);
-    messageBuffer = "";
     return;
   });
 }
