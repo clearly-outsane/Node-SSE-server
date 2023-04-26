@@ -19,7 +19,7 @@ function eventsHandler(request, response, next) {
     "Content-Type": "text/event-stream",
     Connection: "keep-alive",
     "Cache-Control": "no-cache",
-    "Access-Control-Allow-Origin": "*",
+    // "Access-Control-Allow-Origin": "*",
   };
   response.writeHead(200, headers);
 
@@ -27,11 +27,16 @@ function eventsHandler(request, response, next) {
     `https://live.wh.geniussports.com/v2/basketball/read/2261294?ak=5c1f6cae123427ca457f62f88e7b26ab`,
     (res) => {
       res.on("data", (chunk) => {
-        let parsedChunk = JSON.parse(
-          Buffer.from(chunk).toString("utf-8").replace(/\r\n$/, "")
-        );
-
-        sendEventsToAll(parsedChunk);
+        messageBuffer = messageBuffer + Buffer.from(chunk).toString("utf-8");
+        while (messageBuffer.includes("\r\n")) {
+          const message = messageBuffer.split("\r\n", 1)[0];
+          messageBuffer = messageBuffer.slice(message.length);
+          //   let parsedChunk = JSON.parse(messageBuffer.replace(/\r\n$/, ""));
+          sendEventsToAll(message);
+        }
+        // let parsedChunk = JSON.parse(
+        //   Buffer.from(chunk).toString("utf-8").replace(/\r\n$/, "")
+        // );
 
         // clients.forEach((client) =>
         //   client.response.write(`${JSON.stringify(parsedChunk)}\n`)
@@ -57,9 +62,6 @@ function eventsHandler(request, response, next) {
 
   clients.push(newClient);
 
-  response.write(`lalaalal\n`);
-  console.log("lalalal");
-
   request.on("close", () => {
     console.log(`${clientId} Connection closed`);
     clients = clients.filter((client) => client.id !== clientId);
@@ -74,6 +76,7 @@ function sendEventsToAll(data) {
     client.response.write(`id: ${v4()}\n`);
     client.response.write(`event: message\n`);
     client.response.write(`data: ${JSON.stringify(data)}\n\n`);
+    messageBuffer = "";
     return;
   });
 }
@@ -91,6 +94,7 @@ const PORT = 3001;
 
 let clients = [];
 let messages = [];
+let messageBuffer = "";
 
 app.listen(PORT, () => {
   console.log(`Facts Events service listening at http://localhost:${PORT}`);
