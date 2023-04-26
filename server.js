@@ -24,7 +24,9 @@ function eventsHandler(request, response, next) {
   response.writeHead(200, headers);
 
   https.get(
-    `https://live.wh.geniussports.com/v2/basketball/read/2261294?ak=5c1f6cae123427ca457f62f88e7b26ab`,
+    `https://live.wh.geniussports.com/v2/basketball/read/${
+      request.query.matchId ?? "2261294"
+    }?ak=5c1f6cae123427ca457f62f88e7b26ab`,
     (res) => {
       res.on("data", (chunk) => {
         messageBuffer = messageBuffer + Buffer.from(chunk).toString("utf-8");
