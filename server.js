@@ -44,7 +44,7 @@ function eventsHandler(request, response, next) {
             const parsedMessage = JSON.parse(message);
             if (parsedMessage.type === "status") {
               parsedMessage.cached = true;
-              console.log("parsedMessage", parsedMessage);
+
               updateMatch(matchId, parsedMessage);
             }
             sendEventsToAll(message, matchId);
@@ -150,5 +150,5 @@ let matchInfo = [];
 let messageBuffer = "";
 
 app.listen(PORT, () => {
-  console.log(`Facts Events service listening at http://localhost:${PORT}`);
+  console.log(`Events service listening at http://localhost:${PORT}`);
 });
