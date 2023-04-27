@@ -39,6 +39,9 @@ function eventsHandler(request, response, next) {
           res,
         };
         streams.push(streamObject);
+
+        let messageBuffer = "";
+
         res.on("data", (chunk) => {
           messageBuffer = messageBuffer + Buffer.from(chunk).toString("utf-8");
           while (messageBuffer.includes("\r\n")) {
@@ -137,7 +140,6 @@ const PORT = 3001;
 let clients = [];
 let matchInfo = [];
 let streams = [];
-let messageBuffer = "";
 
 app.listen(PORT, () => {
   console.log(`Events service listening at http://localhost:${PORT}`);
