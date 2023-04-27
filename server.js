@@ -17,6 +17,7 @@ app.get("/status", (request, response) =>
 
 function eventsHandler(request, response, next) {
   const matchId = request.query.matchId ?? "2261294";
+
   const headers = {
     "Content-Type": "text/event-stream",
     Connection: "keep-alive",
@@ -40,6 +41,12 @@ function eventsHandler(request, response, next) {
             const message = messageBuffer.split("\r\n", 1)[0];
             messageBuffer = messageBuffer.slice(message.length + 2);
             //   let parsedChunk = JSON.parse(messageBuffer.replace(/\r\n$/, ""));
+            const parsedMessage = JSON.parse(message);
+            if (parsedMessage.type === "status") {
+              parsedMessage.cached = true;
+              console.log("parsedMessage", parsedMessage);
+              updateMatch(matchId, parsedMessage);
+            }
             sendEventsToAll(message, matchId);
           }
           // let parsedChunk = JSON.parse(
@@ -62,7 +69,7 @@ function eventsHandler(request, response, next) {
       response,
       streamingRequest: req,
     };
-
+    sendInitialMessage(matchId, newClient);
     clients.push(newClient);
   }
 
@@ -95,8 +102,6 @@ function eventsHandler(request, response, next) {
   });
 }
 
-app.get("/events", eventsHandler);
-
 function sendEventsToAll(data, matchId) {
   clients.forEach((client) => {
     if (client.matchId !== matchId) return;
@@ -108,19 +113,40 @@ function sendEventsToAll(data, matchId) {
   });
 }
 
-async function getData(request, response, next) {
-  const data = request.body;
-  messages.push(data);
-  response.json(data);
-  return sendEventsToAll(data);
+function updateMatch(matchId, data) {
+  //first find if match exists in matchInfo
+  const foundMatch = matchInfo.filter((match) => match.matchId === matchId);
+  if (foundMatch.length === 0) {
+    matchInfo.push({
+      matchId,
+      data,
+    });
+  } else {
+    matchInfo.forEach((match) => {
+      if (match.matchId === matchId) {
+        match.data = data;
+      }
+    });
+  }
 }
 
-app.post("/events", getData);
+function sendInitialMessage(matchId, client) {
+  const foundMatch = matchInfo.filter((match) => match.matchId === matchId);
+  console.log(foundMatch);
+  if (foundMatch.length > 0) {
+    client.response.write(`id: ${v4()}\n`);
+    client.response.write(`event: message\n`);
+    client.response.write(`data: ${JSON.stringify(foundMatch[0].data)}\n\n`);
+    return;
+  }
+}
+
+app.get("/events", eventsHandler);
 
 const PORT = 3001;
 
 let clients = [];
-let messages = [];
+let matchInfo = [];
 let messageBuffer = "";
 
 app.listen(PORT, () => {
