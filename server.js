@@ -27,11 +27,10 @@ function eventsHandler(request, response, next) {
   response.writeHead(200, headers);
   const clientId = Date.now();
 
-  //find if any other clients are connected to the same match
-  const otherClients = clients.filter(
-    (client) => client.matchId === matchId && client.id !== clientId
-  );
-  if (otherClients.length === 0) {
+  //find if stream are open of the same match
+  const otherStreams = streams.filter((stream) => stream.matchId === matchId);
+  if (otherStreams.length === 0) {
+    console.log("Starting stream for matchId: ", matchId);
     const req = https.get(
       `https://live.wh.geniussports.com/v2/basketball/read/${matchId}?ak=${process.env.API_KEY}`,
       (res) => {
@@ -60,44 +59,34 @@ function eventsHandler(request, response, next) {
 
         res.on("close", () => {
           console.log("Ending stream with matchId: ", matchId);
+          streams = streams.filter((stream) => stream.matchId !== matchId);
         });
       }
     );
-    const newClient = {
-      id: clientId,
+    const streamObject = {
       matchId,
-      response,
-      streamingRequest: req,
+      req,
     };
-    sendInitialMessage(matchId, newClient);
-    clients.push(newClient);
+    streams.push(streamObject);
   }
 
-  //   const data = `data: ${JSON.stringify(facts)}\n\n`;
-
-  //   response.write(data);
-
-  if (otherClients.length > 0) {
-    //add new client here only if there is already a client connected to the same match; since we are doing the same thing when a new matchId comes in up top ^^^
-
-    const newClient = {
-      id: clientId,
-      matchId,
-      response,
-      streamingRequest: otherClients[0].streamingRequest,
-    };
-
-    clients.push(newClient);
-  }
+  //Add new client to clients array
+  const newClient = {
+    id: clientId,
+    matchId,
+    response,
+  };
+  sendInitialMessage(matchId, newClient);
+  console.log("New client added for matchId: ", matchId);
+  clients.push(newClient);
 
   request.on("close", () => {
-    console.log(`${clientId} Connection closed`);
+    console.log(`Connection closed for client ${clientId}`);
     const disconnectedClient = clients.find((client) => client.id === clientId);
-    //find if any other clients are connected to the same match
 
-    if (otherClients.length === 0) {
-      disconnectedClient.streamingRequest.destroy();
-    }
+    // if (otherClients.length === 0) {
+    //   disconnectedClient.streamingRequest.destroy();
+    // }
     clients = clients.filter((client) => client.id !== clientId);
   });
 }
@@ -105,7 +94,7 @@ function eventsHandler(request, response, next) {
 function sendEventsToAll(data, matchId) {
   clients.forEach((client) => {
     if (client.matchId !== matchId) return;
-    console.log("clients--", clients.length);
+    console.log("Connected clients--", clients.length);
     client.response.write(`id: ${v4()}\n`);
     client.response.write(`event: message\n`);
     client.response.write(`data: ${JSON.stringify(data)}\n\n`);
@@ -132,7 +121,7 @@ function updateMatch(matchId, data) {
 
 function sendInitialMessage(matchId, client) {
   const foundMatch = matchInfo.filter((match) => match.matchId === matchId);
-  console.log(foundMatch);
+  console.log(matchId, " has been saved");
   if (foundMatch.length > 0) {
     client.response.write(`id: ${v4()}\n`);
     client.response.write(`event: message\n`);
@@ -147,6 +136,7 @@ const PORT = 3001;
 
 let clients = [];
 let matchInfo = [];
+let streams = [];
 let messageBuffer = "";
 
 app.listen(PORT, () => {
