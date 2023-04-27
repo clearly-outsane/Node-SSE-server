@@ -34,6 +34,11 @@ function eventsHandler(request, response, next) {
     const req = https.get(
       `https://live.wh.geniussports.com/v2/basketball/read/${matchId}?ak=${process.env.API_KEY}`,
       (res) => {
+        const streamObject = {
+          matchId,
+          res,
+        };
+        streams.push(streamObject);
         res.on("data", (chunk) => {
           messageBuffer = messageBuffer + Buffer.from(chunk).toString("utf-8");
           while (messageBuffer.includes("\r\n")) {
@@ -63,11 +68,6 @@ function eventsHandler(request, response, next) {
         });
       }
     );
-    const streamObject = {
-      matchId,
-      req,
-    };
-    streams.push(streamObject);
   }
 
   //Add new client to clients array
